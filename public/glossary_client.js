@@ -1,4 +1,5 @@
 function handleAction(state, action) {
+  console.log('handleAction', action.type);
   if (action.type == "setUser") {
     localStorage.setItem("userName", action.user);
     return Object.assign({}, state, { user: action.user });
@@ -34,13 +35,22 @@ function handleAction(state, action) {
         app.dispatch({ type: "setGlossary", glossary });
       });
   } else if (action.type == "deleteWord") {
-    console.log('deleteWord', action.id);
     fetchOK(wordURL(action.id), { method: "DELETE" })
       .catch(reportError)
       .then(response => response.json())
       .then(glossary => {
         app.dispatch({ type: "setGlossary", glossary });
       });
+  } else if (action.type == "showFoo") {
+    console.log('showFoo');
+    const viewDiv = document.querySelector('.view');
+    viewDiv.textContent = "";
+    viewDiv.appendChild(app.fooDOM);
+  } else if (action.type == "showEditor") {
+    console.log('showEditor');
+    const viewDiv = document.querySelector('.view');
+    viewDiv.textContent = "";
+    viewDiv.appendChild(app.editorDOM);
   }
   return state;
 }
@@ -70,6 +80,31 @@ function renderUserField(name, dispatch) {
   }));
 }
 
+function renderMenu(dispatch) {
+  return elt("div", { className: "menu" },
+    elt("button",
+      {
+        type: "button",
+        onclick() {
+          console.log("showEditor");
+          dispatch({ type: "showEditor" });
+        }
+      },
+      "Editor"
+    ),
+    elt("button",
+      {
+        type: "button",
+        onclick() {
+          console.log("showFoo");
+          dispatch({ type: "showFoo" });
+        }
+      },
+      "Foo"
+    )
+  );
+}
+
 function elt(type, props, ...children) {
   let dom = document.createElement(type);
   if (props) Object.assign(dom, props);
@@ -81,7 +116,6 @@ function elt(type, props, ...children) {
 }
 
 function renderWord(word, dispatch) {
-  console.log('renderWord', word);
   return elt(
     "section", { className: "word" },
     elt("div", null,
@@ -127,7 +161,6 @@ function renderGlossaryForm(dispatch) {
       });
       event.target.reset();
       const localInput = document.querySelector(".local");
-      console.log(localInput);
       localInput.focus();
     }
   }, elt("h3", null, "Submit a word"),
@@ -137,36 +170,27 @@ function renderGlossaryForm(dispatch) {
   );
 }
 
-// async function pollGlossary(update) {
-//   let response;
-//   try {
-//     response = await fetchOK("/glossary");
-//   } catch (e) {
-//     console.log("Request failed: " + e);
-//     await new Promise(resolve => setTimeout(resolve, 500));
-//   }
-//   let responseJson = await response.json();
-//   update(responseJson);
-// }
-
 var GlossaryApp = class GlossaryApp {
   constructor(state, dispatch) {
     this.dispatch = dispatch;
     this.glossaryDOM = elt("div", { className: "glossary" });
-    this.dom = elt("div", null,
-      renderUserField(state.user, dispatch),
+    this.fooDOM = elt("div", { className: "foo" }, "Foo.");
+    this.editorDOM = elt("div", { className: "editor" },
       renderGlossaryForm(dispatch),
       this.glossaryDOM
+    );
+    this.dom = elt("div", null,
+      renderUserField(state.user, dispatch),
+      renderMenu(dispatch),
+      elt("div", { className: "view" }, this.editorDOM)
     );
     this.syncState(state);
   }
 
   syncState(state) {
     if (state.glossary != this.glossary) {
-      console.table(state.glossary);
       this.glossaryDOM.textContent = "";
       for (let word of state.glossary) {
-        console.log('word', word);
         this.glossaryDOM.insertBefore(
           renderWord(word, this.dispatch),
           this.glossaryDOM.firstChild
@@ -183,6 +207,7 @@ function runApp() {
   let user = localStorage.getItem("userName") || "Anton";
   let state;
   function dispatch(action) {
+    console.log('dispatch', action.type);
     state = handleAction(state, action);
     app.syncState(state);
   }
@@ -204,16 +229,6 @@ function runApp() {
     document.body.appendChild(app.dom);
   }
   insteadOfPoll();
-  // Poll for glossary, supplying a callback handling the received glossary
-  // pollGlossary(glossary => {
-  //   if (!app) {
-  //     state = { user, glossary };
-  //     app = new GlossaryApp(state, dispatch);
-  //     document.body.appendChild(app.dom);
-  //   } else {
-  //     dispatch({ type: "setGlossary", glossary });
-  //   }
-  // }).catch(error => reportError(error, 'pollGlossary'));
 }
 
 runApp();
