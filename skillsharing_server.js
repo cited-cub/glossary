@@ -1,11 +1,13 @@
 var { createServer } = require("http");
 var Router = require("./router");
 var ecstatic = require("ecstatic");
+const Chance = require("chance");
 const { readFileSync, writeFile } = require("fs");
 
 const fileName = "./glossary.json";
 
 var router = new Router();
+var chance = new Chance();
 var defaultHeaders = { "Content-Type": "text/plain" };
 
 var SkillShareServer = class SkillShareServer {
@@ -18,6 +20,7 @@ var SkillShareServer = class SkillShareServer {
     let fileServer = ecstatic({ root: "./public" });
     this.server = createServer((request, response) => {
       // Set 'resolved' to promise returned from 'waitForChanges()'
+      console.log("", request.method, request.url);
       let resolved = router.resolve(this, request);
       if (resolved) {
         resolved
@@ -32,6 +35,7 @@ var SkillShareServer = class SkillShareServer {
             response.end(body);
           });
       } else {
+        console.log('Serving', request.url, 'statically');
         fileServer(request, response);
       }
     });
@@ -76,10 +80,10 @@ router.add("DELETE", talkPath, async (server, title) => {
   return { status: 204 };
 });
 
-router.add("DELETE", wordPath, async (server, wordPair) => {
-  console.log('Deleting', wordPair);
-  if (wordPair in server.glossary) {
-    delete server.glossary[wordPair];
+router.add("DELETE", wordPath, async (server, id) => {
+  console.log('Deleting', id);
+  if (id in server.glossary) {
+    delete server.glossary[id];
     server.glossaryUpdated();
   }
   console.table(server.glossary);
@@ -118,20 +122,24 @@ router.add("PUT", talkPath,
   });
 
 router.add("PUT", wordPath,
-  async (server, wordPair, request) => {
+  async (server, id, request) => {
     let requestBody = await readStream(request);
     let word;
-    try { word = JSON.parse(requestBody); }
+    try {
+      word = JSON.parse(requestBody);
+      console.log('word', word);
+    }
     catch (_) { return { status: 400, body: "Invalid JSON" }; }
-
     if (!word ||
-      typeof word.wordPair != "string" ||
+      typeof word.id != "string" ||
       typeof word.local != "string" ||
       typeof word.foreign != "string") {
+      console.log('Bad word data');
       return { status: 400, body: "Bad word data" };
     }
-    server.glossary[wordPair] = {
-      wordPair: word.wordPair,
+    console.log('Updating', id, 'to', word);
+    server.glossary[id] = {
+      id: word.id,
       local: word.local,
       foreign: word.foreign
     };
@@ -158,6 +166,28 @@ router.add("POST", /^\/talks\/([^\/]+)\/comments$/,
     } else {
       return { status: 404, body: `No talk '${title}' found` };
     }
+  });
+
+router.add("POST", /^\/glossary$/,
+  async (server, request) => {
+    let requestBody = await readStream(request);
+    let word;
+    try { word = JSON.parse(requestBody); }
+    catch (_) { return { status: 400, body: "Invalid JSON" }; }
+
+    console.log('word', word);
+    if (!word ||
+      typeof word.local != "string" ||
+      typeof word.foreign != "string") {
+      return { status: 400, body: "Bad comment data" };
+    } else {
+      word.id = chance.guid();
+      console.log('Adding word', word);
+      server.glossary[word.id] = word;
+    }
+    console.table(server.glossary);
+    server.glossaryUpdated();
+    return server.glossaryResponse();
   });
 
 SkillShareServer.prototype.talkResponse = function () {

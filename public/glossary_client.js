@@ -5,11 +5,25 @@ function handleAction(state, action) {
   } else if (action.type == "setGlossary") {
     return Object.assign({}, state, { glossary: action.glossary });
   } else if (action.type == "newWord") {
-    fetchOK(wordURL(action.wordPair), {
+    fetchOK(wordURL(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        local: action.local,
+        foreign: action.foreign
+      })
+    })
+      .catch(error => reportError(error, 'handleAction'))
+      .then(response => response.json())
+      .then(glossary => {
+        app.dispatch({ type: "setGlossary", glossary });
+      });
+  } else if (action.type == "updateWord") {
+    fetchOK(wordURL(action.id), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        wordPair: action.wordPair,
+        id: action.id,
         local: action.local,
         foreign: action.foreign
       })
@@ -20,8 +34,8 @@ function handleAction(state, action) {
         app.dispatch({ type: "setGlossary", glossary });
       });
   } else if (action.type == "deleteWord") {
-    console.log('deleteWord', action.wordPair);
-    fetchOK(wordURL(action.wordPair), { method: "DELETE" })
+    console.log('deleteWord', action.id);
+    fetchOK(wordURL(action.id), { method: "DELETE" })
       .catch(reportError)
       .then(response => response.json())
       .then(glossary => {
@@ -38,8 +52,8 @@ function fetchOK(url, options) {
   })
 }
 
-function wordURL(wordPair) {
-  return "glossary/" + encodeURIComponent(wordPair);
+function wordURL(id) {
+  return "glossary" + (id ? "/" + encodeURIComponent(id) : "");
 }
 
 function reportError(error, text = '') {
@@ -70,16 +84,28 @@ function renderWord(word, dispatch) {
   console.log('renderWord', word);
   return elt(
     "section", { className: "word" },
-    elt("h2", null,
-      word.local,
-      " - ",
-      word.foreign,
-      " ",
+    elt("div", null,
+      elt("input", { type: "text", className: "local", value: word.local }),
+      elt("input", { type: "text", className: "foreign", value: word.foreign }),
       elt("button",
         {
           type: "button",
           onclick() {
-            app.dispatch({ type: "deleteWord", wordPair: word.wordPair });
+            app.dispatch({
+              type: "updateWord",
+              id: word.id,
+              local: this.parentNode.querySelector('input.local').value,
+              foreign: this.parentNode.querySelector('input.foreign').value
+            });
+          }
+        },
+        "Update"
+      ),
+      elt("button",
+        {
+          type: "button",
+          onclick() {
+            app.dispatch({ type: "deleteWord", id: word.id });
           }
         },
         "Delete"
@@ -96,7 +122,6 @@ function renderGlossaryForm(dispatch) {
       event.preventDefault();
       dispatch({
         type: "newWord",
-        wordPair: local.value + foreign.value,
         local: local.value,
         foreign: foreign.value
       });
@@ -108,18 +133,8 @@ function renderGlossaryForm(dispatch) {
   }, elt("h3", null, "Submit a word"),
     elt("label", { className: "local" }, "Local: ", local),
     elt("label", { className: "foreign" }, "Foreign: ", foreign),
-    elt("button", { type: "submit" }, "Submit"),
-    elt("button",
-      {
-        type: "button",
-        onclick() {
-          const localInput = this.parentNode.querySelector(".local > input");
-          localInput.focus();
-          console.log(localInput);
-        }
-      },
-      "Click"
-    ));
+    elt("button", { type: "submit" }, "Submit")
+  );
 }
 
 // async function pollGlossary(update) {
